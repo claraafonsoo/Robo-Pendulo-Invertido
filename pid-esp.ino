@@ -14,7 +14,7 @@ MPU6050 mpu;
 #define PIN_IN2 D7   // Direção (GPIO13)
 
 //PWM 10 BITS
-#define PWM_RANGE 1023 
+#define PWM_RANGE 1023
 #define PWM_FREQ  1000     // 1 kHz
 
 #define DIRECAO_MOTOR 1
@@ -22,7 +22,7 @@ MPU6050 mpu;
 // PARÂMETROS GERAIS
 #define SAMPLE_TIME_MS 10      // tempo de amostragem
 #define MAX_ANGLE 12.0         // angulo maximo (graus)
-#define ANGULO_VERTICAL 90.0  
+#define ANGULO_VERTICAL 0.0    // pêndulo em pé = 0°
 
 // Parâmetros da bateria
 const float V_BAT       = 6.0;    // Tensão da bateria
@@ -38,11 +38,12 @@ const float Kd = 1.66;
 uint8_t FIFOBuffer[64];
 Quaternion q;
 VectorFloat gravity;
+float ypr[3];
 bool mpuReady = false;
 
 // Variáveis de Controle
-float referenciaDeg    = ANGULO_VERTICAL; 
-float pitchOffset      = 0.0;             
+float referenciaDeg    = ANGULO_VERTICAL;
+float pitchOffset      = 0.0;
 float pitchRAW         = 0.0;
 float actualPITCH      = 0.0;
 float integralErrorRad = 0.0;
@@ -120,8 +121,8 @@ void loop() {
     if (mpu.dmpGetCurrentFIFOPacket(FIFOBuffer)) {
       mpu.dmpGetQuaternion(&q, FIFOBuffer);
       mpu.dmpGetGravity(&gravity, &q);
-
-      pitchRAW = atan2(gravity.x, gravity.z) * 180.0 / M_PI;
+      mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+      pitchRAW = ypr[1] * 180.0 / M_PI;
       actualPITCH = pitchRAW - pitchOffset;
 
       // dt real medido
