@@ -4,35 +4,28 @@
 
 MPU6050 mpu;
 
-// PINOS (NodeMCU / ESP8266)
-// I2C do MPU6050
+// Pinos I2C no NodeMCU / ESP8266
 #define PIN_SDA D2
 #define PIN_SCL D1
 
-// Ponte H L298N - Motor A
-#define PIN_ENA D5   // PWM motor A (GPIO14)
-#define PIN_IN1 D6   // Direção motor A (GPIO12)
-#define PIN_IN2 D7   // Direção motor A (GPIO13)
+// Ponte H L298N
+#define PIN_ENA D5   // PWM (GPIO14)
+#define PIN_IN1 D6   // Direção (GPIO12)
+#define PIN_IN2 D7   // Direção (GPIO13)
 
-// Ponte H L298N - Motor B
-#define PIN_ENB D8   // PWM motor B (GPIO15)
-#define PIN_IN3 D0   // Direção motor B (GPIO16)
-#define PIN_IN4 D4   // Direção motor B (GPIO2)
-
-// PWM 10 BITS
-#define PWM_RANGE 1023     // 10 bits: 0 a 1023
+//PWM 10 BITS
+#define PWM_RANGE 1023 
 #define PWM_FREQ  1000     // 1 kHz
 
-#define DIRECAO_MOTOR_A  1
-#define DIRECAO_MOTOR_B -1
+#define DIRECAO_MOTOR 1
 
 // PARÂMETROS GERAIS
 #define SAMPLE_TIME_MS 10      // tempo de amostragem
-#define MAX_ANGLE 12.0        
+#define MAX_ANGLE 12.0         // angulo maximo (graus)
 #define ANGULO_VERTICAL 90.0  
 
 // Parâmetros da bateria
-const float V_BAT       = 6.0;    // Tensão da bateria 
+const float V_BAT       = 6.0;    // Tensão da bateria
 const float V_DEADBAND  = 0.9;   // Zona morta
 const float V_MIN_MOVER = 0.9;   // Corte de corrente mínima
 
@@ -48,8 +41,8 @@ VectorFloat gravity;
 bool mpuReady = false;
 
 // Variáveis de Controle
-float referenciaDeg    = ANGULO_VERTICAL; // ângulo de referência
-float pitchOffset      = 0.0;             // ajuste fino de calibração
+float referenciaDeg    = ANGULO_VERTICAL; 
+float pitchOffset      = 0.0;             
 float pitchRAW         = 0.0;
 float actualPITCH      = 0.0;
 float integralErrorRad = 0.0;
@@ -60,47 +53,37 @@ uint32_t lastHeartbeat = 0;
 uint32_t lastPrint     = 0;
 uint32_t lastMicros    = 0;
 
-// MOTORES 
-void setarSentido(uint8_t pinA, uint8_t pinB, int sentido) {
-  if (sentido > 0) {
-    digitalWrite(pinA, HIGH);
-    digitalWrite(pinB, LOW);
-  } else {
-    digitalWrite(pinA, LOW);
-    digitalWrite(pinB, HIGH);
-  }
-}
-
+// MOTORES
 // pwm: 0 a 1023 | sentido: +1 frente, -1 trás, 0 parado
 void acionarMotores(int pwm, int sentido) {
   if (pwm <= 0 || sentido == 0) {
     digitalWrite(PIN_IN1, LOW);
     digitalWrite(PIN_IN2, LOW);
-    digitalWrite(PIN_IN3, LOW);
-    digitalWrite(PIN_IN4, LOW);
     analogWrite(PIN_ENA, 0);
-    analogWrite(PIN_ENB, 0);
     return;
   }
 
-  setarSentido(PIN_IN1, PIN_IN2, sentido * DIRECAO_MOTOR_A);
-  setarSentido(PIN_IN3, PIN_IN4, sentido * DIRECAO_MOTOR_B);
+  sentido *= DIRECAO_MOTOR;
+
+  if (sentido > 0) {
+    digitalWrite(PIN_IN1, HIGH);
+    digitalWrite(PIN_IN2, LOW);
+  } else {
+    digitalWrite(PIN_IN1, LOW);
+    digitalWrite(PIN_IN2, HIGH);
+  }
 
   if (pwm > PWM_RANGE) pwm = PWM_RANGE;
   analogWrite(PIN_ENA, pwm);
-  analogWrite(PIN_ENB, pwm);
 }
 
 void setup() {
   Serial.begin(115200);
 
-  // pinos ponte H e PWM 
+  // Configura ponte H e PWM de 10 bits
   pinMode(PIN_ENA, OUTPUT);
   pinMode(PIN_IN1, OUTPUT);
   pinMode(PIN_IN2, OUTPUT);
-  pinMode(PIN_ENB, OUTPUT);
-  pinMode(PIN_IN3, OUTPUT);
-  pinMode(PIN_IN4, OUTPUT);
   analogWriteRange(PWM_RANGE);
   analogWriteFreq(PWM_FREQ);
   acionarMotores(0, 0);
@@ -138,10 +121,13 @@ void loop() {
       mpu.dmpGetQuaternion(&q, FIFOBuffer);
       mpu.dmpGetGravity(&gravity, &q);
 
+      // Ângulo com faixa completa: 0° = deitado, 90° = em pé.
+      // (atan2 diferencia inclinar para cada lado da vertical;
+      // o "pitch" do DMP trava em 90° e perderia essa informação)
       pitchRAW = atan2(gravity.x, gravity.z) * 180.0 / M_PI;
       actualPITCH = pitchRAW - pitchOffset;
 
-      // dt
+      // dt real medido
       uint32_t agora = micros();
       float dt = (agora - lastMicros) / 1000000.0;
       lastMicros = agora;
@@ -180,7 +166,8 @@ void loop() {
 
         // ANTI-WINDUP
         float novaIntegral = integralErrorRad + (erroRad * dt);
-        float u_teste = P + (Ki * novaIntegral) + D;
+        float I = Ki * novaIntegral;
+        float u_teste = P + I + D;
 
         if (fabs(u_teste) <= V_BAT) {
           integralErrorRad = novaIntegral;
@@ -214,7 +201,7 @@ void loop() {
         acionarMotores(0, 0);
       }
 
-      // Diagnóstico a cada 50 ms
+      // Diagnóstico (a cada 50 ms para não atrasar o controle)
       if (millis() - lastPrint >= 50) {
         lastPrint = millis();
         Serial.print("Angulo: ");   Serial.print(actualPITCH, 2); Serial.print("° | ");
