@@ -121,9 +121,6 @@ void loop() {
       mpu.dmpGetQuaternion(&q, FIFOBuffer);
       mpu.dmpGetGravity(&gravity, &q);
 
-      // Ângulo com faixa completa: 0° = deitado, 90° = em pé.
-      // (atan2 diferencia inclinar para cada lado da vertical;
-      // o "pitch" do DMP trava em 90° e perderia essa informação)
       pitchRAW = atan2(gravity.x, gravity.z) * 180.0 / M_PI;
       actualPITCH = pitchRAW - pitchOffset;
 
