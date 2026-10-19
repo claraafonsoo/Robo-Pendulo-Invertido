@@ -4,7 +4,7 @@
 
 MPU6050 mpu;
 
-// ================= PINOS (NodeMCU / ESP8266) =================
+// PINOS (NodeMCU / ESP8266)
 // I2C do MPU6050
 #define PIN_SDA D2
 #define PIN_SCL D1
